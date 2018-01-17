@@ -1,0 +1,5 @@
+#!/bin/bash
+
+export SB_BROKER_URL="http://127.0.0.1:3003"
+export SB_BROKER_USERNAME=b-postgres
+export SB_BROKER_PASSWORD=postgres

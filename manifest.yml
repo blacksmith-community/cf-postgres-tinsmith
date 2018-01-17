@@ -1,0 +1,5 @@
+---
+applications:
+  - name: postgres-tinsmith
+    memory: 1G
+    buildpack: go_buildpack
