@@ -42,7 +42,7 @@ func (b *Broker) Init() error {
 		return err
 	}
 
-	db.Exec(`CREATE TYPE state AS ENUM ('setup', 'in-use', 'teardown', 'done', 'gone', 'failed')`)
+	db.Exec(`CREATE TYPE state AS ENUM ('setup', 'in-use', 'teardown', 'done', 'gone', 'failed', 'error')`)
 	db.Exec(`
 CREATE TABLE dbs (
   instance CHAR(36)          UNIQUE,
@@ -263,7 +263,7 @@ func (b *Broker) LastOperation(instance string) (brokerapi.LastOperation, error)
 		return brokerapi.LastOperation{State: "in progress"}, nil
 	case "done", "gone":
 		return brokerapi.LastOperation{State: "succeeded"}, nil
-	case "failed":
+	case "failed", "error":
 		return brokerapi.LastOperation{State: "failed"}, nil
 	default:
 		return brokerapi.LastOperation{}, fmt.Errorf("invalid state '%s'", state)
