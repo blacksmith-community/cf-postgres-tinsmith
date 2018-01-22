@@ -64,6 +64,19 @@ func (ss Services) Tagged(tags ...string) (Instance, bool) {
 	return Instance{}, false
 }
 
+func (ss Services) Named(names ...string) (Instance, bool) {
+	for _, list := range ss {
+		for _, svc := range list {
+			for _, want := range names {
+				if svc.Name == want {
+					return svc, true
+				}
+			}
+		}
+	}
+	return Instance{}, false
+}
+
 func (ss Services) WithCredentials(keys ...string) (Instance, bool) {
 	for _, list := range ss {
 		for _, svc := range list {

@@ -15,7 +15,7 @@
 		},
 		{
 			"ImportPath": "github.com/jhunt/vcaptive",
-			"Rev": "785beb84797b353461f85eeaee400691f940f5d8"
+			"Rev": "e4d3950461378b0a5ad8ac4d1ceed670c6ed6414"
 		},
 		{
 			"ImportPath": "github.com/lib/pq",
