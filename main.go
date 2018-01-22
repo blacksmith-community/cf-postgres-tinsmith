@@ -40,10 +40,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	instance, found := services.Tagged("postgres", "postgresql")
-	if !found {
-		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: no 'postgres' service found\n")
-		os.Exit(2)
+	var (
+		found    bool
+		instance vcaptive.Instance
+	)
+	if name := os.Getenv("USE_SERVICE"); name != "" {
+		instance, found = services.Named(name)
+		if !found {
+			fmt.Fprintf(os.Stderr, "VCAP_SERVICES: no service named '%s' found\n", name)
+			os.Exit(2)
+		}
+
+	} else {
+		instance, found = services.Tagged("postgres", "postgresql")
+		if !found {
+			fmt.Fprintf(os.Stderr, "VCAP_SERVICES: no 'postgres' service found\n")
+			os.Exit(2)
+		}
 	}
 
 	if s, ok := instance.GetString("username"); ok {

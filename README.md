@@ -81,6 +81,11 @@ authentication parameters of the broker:
 - `$SB_BROKER_PASSWORD` - The HTTP Basic Auth password that must
   be used to access this broker.  Defaults to `postgres`.
 
+You can also override the service selection logic and force it to
+pick a specific, named service by setting the `$USE_SERVICE`
+environment variable to its name.  Otherwise, the broker will look
+for bound services that are tagged `postgres` or `postgresql`.
+
 
 
 
