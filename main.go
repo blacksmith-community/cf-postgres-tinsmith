@@ -80,8 +80,8 @@ func main() {
 	if u, ok := instance.GetUint("port"); ok {
 		broker.Port = fmt.Sprintf("%d", u)
 	} else {
-		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'port' credential\n", instance.Label)
-		os.Exit(3)
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'port' credential; using default of 5432\n", instance.Label)
+		broker.Port = "5432"
 	}
 
 	if err := broker.Init(); err != nil {
