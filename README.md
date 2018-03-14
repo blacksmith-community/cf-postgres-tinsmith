@@ -48,7 +48,7 @@ cf start postgres-tinsmith
 # register this tinsmith as a service broker in CF
 cf create-service-broker postgres-tinsmith my-broker a-secret \
   https://postgres-tinsmith.$APP_DOMAIN
-cf enable-service-access -s postgres
+cf enable-service-access postgres
 
 # marvel at your handiwork
 cf marketplace
