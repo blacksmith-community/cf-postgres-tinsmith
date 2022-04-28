@@ -1,6 +1,6 @@
 {
 	"ImportPath": "github.com/blacksmith-community/cf-postgres-tinsmith",
-	"GoVersion": "go1.8",
+	"GoVersion": "go1.17",
 	"GodepVersion": "v79",
 	"Deps": [
 		{
