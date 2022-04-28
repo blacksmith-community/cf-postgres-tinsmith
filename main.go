@@ -60,25 +60,36 @@ func main() {
 	}
 
 	if s, ok := instance.GetString("username"); ok {
+		info("username: %s\n", s)
 		broker.Username = s
 	} else {
 		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'username' credential\n", instance.Label)
 		os.Exit(3)
 	}
 	if s, ok := instance.GetString("password"); ok {
+		info("password: %s\n", s)
 		broker.Password = s
 	} else {
 		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'password' credential\n", instance.Label)
 		os.Exit(3)
 	}
 	if s, ok := instance.GetString("host"); ok {
+		info("host: %s\n", s)
 		broker.Host = s
 	} else {
 		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'host' credential\n", instance.Label)
 		os.Exit(3)
 	}
-	if u, ok := instance.GetUint("port"); ok {
-		broker.Port = fmt.Sprintf("%d", u)
+	if s, ok := instance.GetString("db_name"); ok {
+		info("db_name: %s\n", s)
+		broker.InitialDatabase = s
+	} else {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'db_name' credential\n", instance.Label)
+		os.Exit(3)
+	}
+	if s, ok := instance.GetString("port"); ok {
+		info("port: %s\n", s)
+		broker.Port = s
 	} else {
 		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'port' credential; using default of 5432\n", instance.Label)
 		broker.Port = "5432"

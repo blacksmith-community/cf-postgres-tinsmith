@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"database/sql"
+
 	_ "github.com/lib/pq"
 
 	"github.com/pivotal-cf/brokerapi"
@@ -18,25 +19,35 @@ type Broker struct {
 		ID   string
 	}
 
-	Host     string
-	Port     string
-	Username string
-	Password string
+	Host            string
+	Port            string
+	Username        string
+	Password        string
+	InitialDatabase string
 
 	db *sql.DB
 }
 
 func (b *Broker) Init() error {
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/?sslmode=disable", b.Username, b.Password, b.Host, b.Port)
+	info("initializing broker\n")
+
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", b.Username, b.Password, b.Host, b.Port, b.InitialDatabase)
+	info("database connection string: %s\n", dsn)
+
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "unable to open database connection: %s\n", dsn)
 		return err
 	}
 
-	db.Exec(`CREATE DATABASE broker`)
+	_, createBrokerDbErr := db.Exec(`CREATE DATABASE broker`)
+	if createBrokerDbErr != nil {
+		fmt.Fprintf(os.Stderr, "unable to create broker database: %s\n", createBrokerDbErr)
+		return err
+	}
 	db.Close()
 
-	dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/broker?sslmode=disable", b.Username, b.Password, b.Host, b.Port)
+	dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/broker", b.Username, b.Password, b.Host, b.Port)
 	db, err = sql.Open("postgres", dsn)
 	if err != nil {
 		return err
