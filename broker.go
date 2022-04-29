@@ -6,7 +6,7 @@ import (
 
 	"database/sql"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 
 	"github.com/pivotal-cf/brokerapi"
 )
@@ -40,13 +40,14 @@ func (b *Broker) Init() error {
 	}
 
 	_, createBrokerDbErr := db.Exec(`CREATE DATABASE broker`)
-	if createBrokerDbErr != nil {
-		fmt.Fprintf(os.Stderr, "unable to create broker database: %s\n", createBrokerDbErr)
-		return err
+	if createBrokerDbErr := createBrokerDbErr.(*pq.Error); createBrokerDbErr != nil {
+		if createBrokerDbErr.Code == "42P04" {
+			info("broker database already exists, continuing\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "error creating broker database: %s\n", createBrokerDbErr)
+			return createBrokerDbErr
+		}
 	}
-	// if createBrokerDbErr, ok := createBrokerDbErr.(*pq.Error); ok {
-	// 	fmt.Println("pq error:", err.Code.Name())
-	// }
 	db.Close()
 
 	dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/broker", b.Username, b.Password, b.Host, b.Port)
