@@ -140,7 +140,7 @@ func (b *Broker) Grant(instance, binding string) (string, string, string, error)
 	user := "u" + random(16)
 	pass := random(64)
 
-	_, err = b.db.Exec(`CREATE USER ` + user + ` WITH NOCREATEDB NOCREATEROLE NOREPLICATION UNENCRYPTED PASSWORD '` + pass + `'`)
+	_, err = b.db.Exec(`CREATE USER ` + user + ` WITH NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '` + pass + `'`)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to provision a user: %s", err)
 	}
