@@ -37,6 +37,9 @@ cd cf-postgres-tinsmith
 cf push --no-start
 cf bind-service postgres-tinsmith YOUR-DATABASE-SERVICE
 
+# tell tinsmith to use your database service
+cf set-env postgres-tinsmith USE_SERVICE YOUR-DATABASE-SERVICE
+
 # you may want to set some other environment variables at
 # this stage; see "Configuration", below.
 cf set-env postgres-tinsmith SB_BROKER_USERNAME my-broker
