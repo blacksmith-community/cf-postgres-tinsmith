@@ -44,6 +44,9 @@ func (b *Broker) Init() error {
 		fmt.Fprintf(os.Stderr, "unable to create broker database: %s\n", createBrokerDbErr)
 		return err
 	}
+	// if createBrokerDbErr, ok := createBrokerDbErr.(*pq.Error); ok {
+	// 	fmt.Println("pq error:", err.Code.Name())
+	// }
 	db.Close()
 
 	dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/broker", b.Username, b.Password, b.Host, b.Port)
