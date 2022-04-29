@@ -32,11 +32,10 @@ func (b *Broker) Init() error {
 	info("initializing broker\n")
 
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", b.Username, b.Password, b.Host, b.Port, b.InitialDatabase)
-	info("database connection string: %s\n", dsn)
 
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to open database connection: %s\n", dsn)
+		fmt.Fprintf(os.Stderr, "unable to open database connection: %s\n", err)
 		return err
 	}
 
