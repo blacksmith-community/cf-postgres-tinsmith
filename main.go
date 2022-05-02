@@ -18,19 +18,6 @@ func cfg(deflt, env string) string {
 	return deflt
 }
 
-func getDatabaseName(instance vcaptive.Instance) (string, bool) {
-	if s, ok := instance.GetString("db_name"); ok {
-		return s, ok
-	}
-	if s, ok := instance.GetString("name"); ok {
-		return s, ok
-	}
-	if s, ok := instance.GetString("database"); ok {
-		return s, ok
-	}
-	return "", false
-}
-
 func main() {
 	broker := &Broker{}
 	broker.Service.ID = cfg("postgres-c504319a-61e7-459e-83ac-01243787689b", "SERVICE_ID")
@@ -47,61 +34,6 @@ func main() {
 	}
 
 	fmt.Printf("running v%s of %s at http://%s\n", app.Version, app.Name, app.URIs[0])
-	services, err := vcaptive.ParseServices(os.Getenv("VCAP_SERVICES"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: %s\n", err)
-		os.Exit(1)
-	}
-
-	var (
-		found    bool
-		instance vcaptive.Instance
-	)
-	if name := os.Getenv("USE_SERVICE"); name != "" {
-		instance, found = services.Named(name)
-		if !found {
-			fmt.Fprintf(os.Stderr, "VCAP_SERVICES: no service named '%s' found\n", name)
-			os.Exit(2)
-		}
-
-	} else {
-		instance, found = services.Tagged("postgres", "postgresql")
-		if !found {
-			fmt.Fprintf(os.Stderr, "VCAP_SERVICES: no 'postgres' service found\n")
-			os.Exit(2)
-		}
-	}
-
-	if s, ok := instance.GetString("username"); ok {
-		broker.Username = s
-	} else {
-		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'username' credential\n", instance.Label)
-		os.Exit(3)
-	}
-	if s, ok := instance.GetString("password"); ok {
-		broker.Password = s
-	} else {
-		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'password' credential\n", instance.Label)
-		os.Exit(3)
-	}
-	if s, ok := instance.GetString("host"); ok {
-		broker.Host = s
-	} else {
-		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'host' credential\n", instance.Label)
-		os.Exit(3)
-	}
-	if s, ok := getDatabaseName(instance); ok {
-		broker.InitialDatabase = s
-	} else {
-		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no database name credential\n", instance.Label)
-		os.Exit(3)
-	}
-	if s, ok := instance.GetString("port"); ok {
-		broker.Port = s
-	} else {
-		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'port' credential; using default of 5432\n", instance.Label)
-		broker.Port = "5432"
-	}
 
 	if err := broker.Init(); err != nil {
 		panic(err)

@@ -6,6 +6,7 @@ import (
 
 	"database/sql"
 
+	"github.com/jhunt/vcaptive"
 	"github.com/lib/pq"
 
 	"github.com/pivotal-cf/brokerapi"
@@ -28,9 +29,83 @@ type Broker struct {
 	db *sql.DB
 }
 
+func getDatabaseName(instance vcaptive.Instance) (string, bool) {
+	if s, ok := instance.GetString("db_name"); ok {
+		return s, ok
+	}
+	if s, ok := instance.GetString("name"); ok {
+		return s, ok
+	}
+	if s, ok := instance.GetString("database"); ok {
+		return s, ok
+	}
+	return "", false
+}
+
 func (b *Broker) Init() error {
 	info("initializing broker\n")
 
+	services, err := vcaptive.ParseServices(os.Getenv("VCAP_SERVICES"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: %s\n", err)
+		os.Exit(1)
+	}
+
+	var (
+		found    bool
+		instance vcaptive.Instance
+	)
+	if name := os.Getenv("USE_SERVICE"); name != "" {
+		instance, found = services.Named(name)
+		if !found {
+			fmt.Fprintf(os.Stderr, "VCAP_SERVICES: no service named '%s' found\n", name)
+			os.Exit(2)
+		}
+	} else {
+		instance, found = services.Tagged("postgres", "postgresql")
+		if !found {
+			fmt.Fprintf(os.Stderr, "VCAP_SERVICES: no 'postgres' service found\n")
+			os.Exit(2)
+		}
+	}
+
+	if s, ok := instance.GetString("username"); ok {
+		b.Username = s
+	} else {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'username' credential\n", instance.Label)
+		os.Exit(3)
+	}
+	if s, ok := instance.GetString("password"); ok {
+		b.Password = s
+	} else {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'password' credential\n", instance.Label)
+		os.Exit(3)
+	}
+	if s, ok := instance.GetString("host"); ok {
+		b.Host = s
+	} else {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'host' credential\n", instance.Label)
+		os.Exit(3)
+	}
+	if s, ok := getDatabaseName(instance); ok {
+		b.InitialDatabase = s
+	} else {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no database name credential\n", instance.Label)
+		os.Exit(3)
+	}
+	if s, ok := instance.GetString("port"); ok {
+		b.Port = s
+	} else {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'port' credential; using default of 5432\n", instance.Label)
+		b.Port = "5432"
+	}
+
+	b.initDbConnection()
+
+	return nil
+}
+
+func (b *Broker) initDbConnection() error {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", b.Username, b.Password, b.Host, b.Port, b.InitialDatabase)
 
 	db, err := sql.Open("postgres", dsn)
