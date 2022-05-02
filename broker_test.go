@@ -17,8 +17,17 @@ const vcapServicesDbCredsJson = `{
 	}]
 }`
 
-func setVcapServicesEnv(dbNameKey string, dbName string) {
-	os.Setenv("VCAP_SERVICES", fmt.Sprintf(vcapServicesDbCredsJson, dbNameKey, dbName))
+const vcapServicesDbFullCredsJson = `{
+	"aws-rds": [{
+		"credentials": {
+			"%s": "%s"
+		},
+		"tags": ["postgresql"]
+	}]
+}`
+
+func setVcapServicesEnv(credentialKey string, credentialValue string) {
+	os.Setenv("VCAP_SERVICES", fmt.Sprintf(vcapServicesDbCredsJson, credentialKey, credentialValue))
 }
 
 func TestGetDatabaseName(t *testing.T) {

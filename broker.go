@@ -100,21 +100,24 @@ func (b *Broker) Init() error {
 		b.Port = "5432"
 	}
 
-	b.initDbConnection()
+	b.createBrokerDb()
+	b.createBrokerDbSchemas()
 
 	return nil
 }
 
-func (b *Broker) initDbConnection() error {
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", b.Username, b.Password, b.Host, b.Port, b.InitialDatabase)
+func (b *Broker) createBrokerDb() error {
+	if b.db == nil {
+		dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", b.Username, b.Password, b.Host, b.Port, b.InitialDatabase)
 
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to open database connection: %s\n", err)
-		return err
+		db, err := sql.Open("postgres", dsn)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "unable to open database connection: %s\n", err)
+			return err
+		}
+		b.db = db
 	}
-
-	_, createBrokerDbErr := db.Exec(`CREATE DATABASE broker`)
+	_, createBrokerDbErr := b.db.Exec(`CREATE DATABASE broker`)
 	if createBrokerDbErr != nil {
 		createBrokerDbErr := createBrokerDbErr.(*pq.Error)
 		if createBrokerDbErr.Code == "42P04" {
@@ -124,10 +127,13 @@ func (b *Broker) initDbConnection() error {
 			return createBrokerDbErr
 		}
 	}
-	db.Close()
+	b.db.Close()
+	return nil
+}
 
-	dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/broker", b.Username, b.Password, b.Host, b.Port)
-	db, err = sql.Open("postgres", dsn)
+func (b *Broker) createBrokerDbSchemas() error {
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/broker", b.Username, b.Password, b.Host, b.Port)
+	db, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return err
 	}
