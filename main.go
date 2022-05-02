@@ -18,6 +18,19 @@ func cfg(deflt, env string) string {
 	return deflt
 }
 
+func getDatabaseName(instance vcaptive.Instance) (string, bool) {
+	if s, ok := instance.GetString("db_name"); ok {
+		return s, ok
+	}
+	if s, ok := instance.GetString("name"); ok {
+		return s, ok
+	}
+	if s, ok := instance.GetString("database"); ok {
+		return s, ok
+	}
+	return "", false
+}
+
 func main() {
 	broker := &Broker{}
 	broker.Service.ID = cfg("postgres-c504319a-61e7-459e-83ac-01243787689b", "SERVICE_ID")
@@ -77,10 +90,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'host' credential\n", instance.Label)
 		os.Exit(3)
 	}
-	if s, ok := instance.GetString("db_name"); ok {
+	if s, ok := getDatabaseName(instance); ok {
 		broker.InitialDatabase = s
 	} else {
-		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'db_name' credential\n", instance.Label)
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no database name credential\n", instance.Label)
 		os.Exit(3)
 	}
 	if s, ok := instance.GetString("port"); ok {
