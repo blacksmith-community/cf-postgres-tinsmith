@@ -40,7 +40,8 @@ func (b *Broker) Init() error {
 	}
 
 	_, createBrokerDbErr := db.Exec(`CREATE DATABASE broker`)
-	if createBrokerDbErr := createBrokerDbErr.(*pq.Error); createBrokerDbErr != nil {
+	if createBrokerDbErr != nil {
+		createBrokerDbErr := createBrokerDbErr.(*pq.Error)
 		if createBrokerDbErr.Code == "42P04" {
 			info("broker database already exists, continuing\n")
 		} else {
