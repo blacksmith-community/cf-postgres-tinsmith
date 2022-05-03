@@ -49,6 +49,17 @@ func (mockBroker *MockBroker) Provision(instance string, details brokerapi.Provi
 	return spec, nil
 }
 
+func (mockBroker *MockBroker) Teardown(instance string) {
+	defer mockBroker.wg.Done()
+
+	mockBroker.Broker.Teardown(instance)
+}
+
+func (mockBroker *MockBroker) Deprovision(instance string, details brokerapi.DeprovisionDetails, asyncAllowed bool) (brokerapi.IsAsync, error) {
+	go mockBroker.Teardown(instance)
+	return true, nil
+}
+
 func setVcapServicesEnv(credentialKey string, credentialValue string) {
 	os.Setenv("VCAP_SERVICES", fmt.Sprintf(vcapServicesDbCredsJson, credentialKey, credentialValue))
 }
@@ -178,6 +189,48 @@ func TestBrokerProvisionDatabase(t *testing.T) {
 
 	mockBroker.wg.Add(1)
 	_, dbErr := mockBroker.Provision(instance, fakeDetails, true)
+	mockBroker.wg.Wait()
+
+	if dbErr != nil {
+		t.Fatalf(`unexpected error: %s`, dbErr)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestBrokerDeprovisionDatabase(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	instance := "foobar"
+	fakeDetails := brokerapi.DeprovisionDetails{}
+
+	dbColumns := []string{"state", "name"}
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT state, name FROM dbs WHERE instance = $1`)).
+		WithArgs(instance).
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow("enabled", mockDbName))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE dbs SET state = 'teardown' WHERE instance = $1`)).
+		WithArgs(instance).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	credsColumns := []string{"name"}
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT creds.name FROM creds INNER JOIN dbs ON creds.db = dbs.name WHERE dbs.instance = $1`)).
+		WithArgs(instance).
+		WillReturnRows(sqlmock.NewRows(credsColumns).AddRow("fakeCreds"))
+
+	mockBroker.wg.Add(1)
+	_, dbErr := mockBroker.Deprovision(instance, fakeDetails, true)
 	mockBroker.wg.Wait()
 
 	if dbErr != nil {
