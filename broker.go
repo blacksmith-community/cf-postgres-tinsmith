@@ -12,6 +12,9 @@ import (
 	"github.com/pivotal-cf/brokerapi"
 )
 
+type BrokerInterface interface {
+}
+
 type Broker struct {
 	Description   string
 	Tags          []string
@@ -167,16 +170,20 @@ func (b *Broker) fail(what, instance string, err error) {
 	b.db.Exec(`UPDATE dbs SET state = 'failed'::state WHERE instance = $1`, instance)
 }
 
-func (b *Broker) Setup(instance string) {
+func (b *Broker) generatedRandomDbName() string {
 	db := "db" + random(40)
+	return db
+}
+
+func (b *Broker) Setup(instance string, dbName string) {
 	_, err := b.db.Exec(`INSERT INTO dbs (instance, name, state, expires) VALUES ($1, $2, $3, $4)`,
-		instance, db, "setup", 0)
+		instance, dbName, "setup", 0)
 	if err != nil {
 		b.fail("creating `dbs` entry", instance, err)
 		return
 	}
 
-	_, err = b.db.Exec(`CREATE DATABASE ` + db)
+	_, err = b.db.Exec(`CREATE DATABASE ` + dbName)
 	if err != nil {
 		b.fail("creating instance database", instance, err)
 		return
@@ -332,7 +339,9 @@ func (b *Broker) Provision(instance string, details brokerapi.ProvisionDetails, 
 		return spec, fmt.Errorf("invalid plan %s/%s", details.ServiceID, details.PlanID)
 	}
 
-	go b.Setup(instance)
+	dbName := b.generatedRandomDbName()
+
+	go b.Setup(instance, dbName)
 	return spec, nil
 }
 

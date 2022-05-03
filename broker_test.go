@@ -3,11 +3,14 @@ package main
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"sync"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/jhunt/vcaptive"
 	"github.com/lib/pq"
+	"github.com/pivotal-cf/brokerapi"
 )
 
 const vcapServicesDbCredsJson = `{
@@ -18,6 +21,33 @@ const vcapServicesDbCredsJson = `{
 		"tags": ["postgresql"]
 	}]
 }`
+
+const mockDbName string = "fakeDbName"
+
+type MockBroker struct {
+	Broker
+
+	wg sync.WaitGroup
+}
+
+func (mockBroker *MockBroker) generatedRandomDbName() string {
+	return mockDbName
+}
+
+func (mockBroker *MockBroker) Setup(instance string, dbName string) {
+	defer mockBroker.wg.Done()
+
+	mockBroker.Broker.Setup(instance, dbName)
+}
+
+func (mockBroker *MockBroker) Provision(instance string, details brokerapi.ProvisionDetails, asyncAllowed bool) (brokerapi.ProvisionedServiceSpec, error) {
+	spec := brokerapi.ProvisionedServiceSpec{IsAsync: true}
+
+	dbName := mockBroker.generatedRandomDbName()
+	go mockBroker.Setup(instance, dbName)
+
+	return spec, nil
+}
 
 func setVcapServicesEnv(credentialKey string, credentialValue string) {
 	os.Setenv("VCAP_SERVICES", fmt.Sprintf(vcapServicesDbCredsJson, credentialKey, credentialValue))
@@ -80,13 +110,15 @@ func TestCreateBrokerDatabase(t *testing.T) {
 	}
 	defer db.Close()
 
-	broker := &Broker{
-		db: db,
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
 	}
 
 	mock.ExpectExec("CREATE DATABASE broker").WillReturnResult(sqlmock.NewResult(1, 1))
 
-	dbErr := broker.createBrokerDb()
+	dbErr := mockBroker.createBrokerDb()
 	if dbErr != nil {
 		t.Fatalf(`unexpected error: %s`, dbErr)
 	}
@@ -104,15 +136,50 @@ func TestCreateBrokerDatabaseError(t *testing.T) {
 	}
 	defer db.Close()
 
-	broker := &Broker{
-		db: db,
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
 	}
-
 	mock.ExpectExec("CREATE DATABASE broker").WillReturnError(&pq.Error{
 		Code: "42P04",
 	})
 
-	dbErr := broker.createBrokerDb()
+	dbErr := mockBroker.createBrokerDb()
+	if dbErr != nil {
+		t.Fatalf(`unexpected error: %s`, dbErr)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestBrokerProvisionDatabase(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	instance := "foobar"
+	fakeDetails := brokerapi.ProvisionDetails{}
+
+	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO dbs (instance, name, state, expires) VALUES ($1, $2, $3, $4)`)).WithArgs(instance, mockDbName, "setup", 0).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("CREATE DATABASE %s", mockDbName)).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE dbs SET state = 'done' WHERE instance = $1`)).WithArgs(instance).WillReturnResult(sqlmock.NewResult(1, 1))
+
+	mockBroker.wg.Add(1)
+	_, dbErr := mockBroker.Provision(instance, fakeDetails, true)
+	mockBroker.wg.Wait()
+
 	if dbErr != nil {
 		t.Fatalf(`unexpected error: %s`, dbErr)
 	}
