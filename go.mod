@@ -3,6 +3,7 @@ module github.com/blacksmith-community/cf-postgres-tinsmith
 go 1.18
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/jhunt/vcaptive v0.0.0-20180122155229-e4d395046137
 	github.com/lib/pq v0.0.0-20171126050459-83612a56d3dd
 	github.com/pivotal-cf/brokerapi v0.0.0-20160520210533-c0e4e272dc4e
