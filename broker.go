@@ -100,53 +100,53 @@ func (b *Broker) Init() error {
 		b.Port = "5432"
 	}
 
+	b.openDbConnection(b.InitialDatabase)
 	b.createBrokerDb()
+	b.db.Close()
+
+	b.openDbConnection("broker")
 	b.createBrokerDbSchemas()
 
 	return nil
 }
 
-func (b *Broker) createBrokerDb() error {
-	if b.db == nil {
-		dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", b.Username, b.Password, b.Host, b.Port, b.InitialDatabase)
+func (b *Broker) openDbConnection(dbName string) error {
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", b.Username, b.Password, b.Host, b.Port, dbName)
 
-		db, err := sql.Open("postgres", dsn)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "unable to open database connection: %s\n", err)
-			return err
-		}
-		b.db = db
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "unable to open database connection: %s\n", err)
+		return err
 	}
+
+	b.db = db
+	return nil
+}
+
+func (b *Broker) createBrokerDb() error {
 	_, createBrokerDbErr := b.db.Exec(`CREATE DATABASE broker`)
 	if createBrokerDbErr != nil {
-		createBrokerDbErr := createBrokerDbErr.(*pq.Error)
-		if createBrokerDbErr.Code == "42P04" {
+		createBrokerDbPqErr, ok := createBrokerDbErr.(*pq.Error)
+		if ok && createBrokerDbPqErr.Code == "42P04" {
 			info("broker database already exists, continuing\n")
 		} else {
 			fmt.Fprintf(os.Stderr, "error creating broker database: %s\n", createBrokerDbErr)
 			return createBrokerDbErr
 		}
 	}
-	b.db.Close()
 	return nil
 }
 
 func (b *Broker) createBrokerDbSchemas() error {
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/broker", b.Username, b.Password, b.Host, b.Port)
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		return err
-	}
-
-	db.Exec(`CREATE TYPE state AS ENUM ('setup', 'in-use', 'teardown', 'done', 'gone', 'failed', 'error')`)
-	db.Exec(`
+	b.db.Exec(`CREATE TYPE state AS ENUM ('setup', 'in-use', 'teardown', 'done', 'gone', 'failed', 'error')`)
+	b.db.Exec(`
 CREATE TABLE dbs (
   instance CHAR(36)          UNIQUE,
   name     CHAR(42) NOT NULL UNIQUE,
   state    state,
   expires  INTEGER
 )`)
-	db.Exec(`
+	b.db.Exec(`
 CREATE TABLE IF NOT EXISTS
 creds (
   binding CHAR(36) NOT NULL UNIQUE,
@@ -154,8 +154,6 @@ creds (
   pass    CHAR(64) NOT NULL,
   db      CHAR(42) NOT NULL
 )`)
-
-	b.db = db
 	return nil
 }
 

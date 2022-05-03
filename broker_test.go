@@ -5,19 +5,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/jhunt/vcaptive"
+	"github.com/lib/pq"
 )
 
 const vcapServicesDbCredsJson = `{
-	"aws-rds": [{
-		"credentials": {
-			"%s": "%s"
-		},
-		"tags": ["postgresql"]
-	}]
-}`
-
-const vcapServicesDbFullCredsJson = `{
 	"aws-rds": [{
 		"credentials": {
 			"%s": "%s"
@@ -77,5 +70,55 @@ func TestGetDatabaseName(t *testing.T) {
 				t.Fatalf(`expected getDatabaseName = %q, got: %v`, test.dbName, value)
 			}
 		})
+	}
+}
+
+func TestCreateBrokerDatabase(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	broker := &Broker{
+		db: db,
+	}
+
+	mock.ExpectExec("CREATE DATABASE broker").WillReturnResult(sqlmock.NewResult(1, 1))
+
+	dbErr := broker.createBrokerDb()
+	if dbErr != nil {
+		t.Fatalf(`unexpected error: %s`, dbErr)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestCreateBrokerDatabaseError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	broker := &Broker{
+		db: db,
+	}
+
+	mock.ExpectExec("CREATE DATABASE broker").WillReturnError(&pq.Error{
+		Code: "42P04",
+	})
+
+	dbErr := broker.createBrokerDb()
+	if dbErr != nil {
+		t.Fatalf(`unexpected error: %s`, dbErr)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
 	}
 }
