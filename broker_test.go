@@ -814,3 +814,137 @@ func TestBrokerUnbindDatabaseDeleteCredsFailure(t *testing.T) {
 		t.Errorf("there were unfulfilled expectations: %s", err)
 	}
 }
+
+func TestBrokerLastOperationSuccess(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	mockInstance := "instance-" + random(8)
+
+	dbColumns := []string{"state"}
+	dbRowValues := []driver.Value{"done"}
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT state FROM dbs WHERE instance = $1`)).
+		WithArgs(mockInstance).
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(dbRowValues...))
+
+	_, err = mockBroker.LastOperation(mockInstance)
+	if err != nil {
+		t.Fatalf(`unexpected error: %s`, err)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestBrokerLastOperationQueryFailure(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	mockInstance := "instance-" + random(8)
+	expectedErr := errors.New("select query error")
+	expectedOperation := brokerapi.LastOperation{State: "failed"}
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT state FROM dbs WHERE instance = $1`)).
+		WithArgs(mockInstance).
+		WillReturnError(expectedErr)
+
+	lastOperation, err := mockBroker.LastOperation(mockInstance)
+	if err != nil {
+		t.Fatalf(`unexpected error: %s`, err)
+	}
+	if lastOperation != expectedOperation {
+		t.Fatalf("expected operation: %s, received: %s", expectedOperation, lastOperation)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestBrokerLastOperationNoResultsFailure(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	mockInstance := "instance-" + random(8)
+	expectedOperation := brokerapi.LastOperation{State: "failed"}
+
+	dbColumns := []string{"state"}
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT state FROM dbs WHERE instance = $1`)).
+		WithArgs(mockInstance).
+		WillReturnRows(sqlmock.NewRows(dbColumns))
+
+	lastOperation, err := mockBroker.LastOperation(mockInstance)
+	if err != nil {
+		t.Fatalf(`unexpected error: %s`, err)
+	}
+	if lastOperation != expectedOperation {
+		t.Fatalf("expected operation: %s, received: %s", expectedOperation, lastOperation)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestBrokerLastOperationUnexpectedState(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	mockInstance := "instance-" + random(8)
+
+	dbColumns := []string{"state"}
+	dbRowValues := []driver.Value{"unexpected"}
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT state FROM dbs WHERE instance = $1`)).
+		WithArgs(mockInstance).
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(dbRowValues...))
+
+	_, err = mockBroker.LastOperation(mockInstance)
+	if err == nil {
+		t.Fatal("expected error but received nil")
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
