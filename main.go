@@ -11,13 +11,6 @@ import (
 	"github.com/pivotal-golang/lager"
 )
 
-func cfg(deflt, env string) string {
-	if s := os.Getenv(env); s != "" {
-		return s
-	}
-	return deflt
-}
-
 func main() {
 	broker := &Broker{}
 	broker.Service.ID = cfg("postgres-c504319a-61e7-459e-83ac-01243787689b", "SERVICE_ID")
