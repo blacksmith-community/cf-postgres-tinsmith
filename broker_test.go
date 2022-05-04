@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"testing"
 
@@ -25,6 +26,8 @@ const vcapServicesDbCredsJson = `{
 }`
 
 const mockDbName string = "fakeDbName"
+const userNameRegex string = "u[0-9|a-z]{16}"
+const passwordRegex string = "[0-9|a-z]{64}"
 
 type UsernameArgument struct{}
 
@@ -34,7 +37,7 @@ func (u UsernameArgument) Match(value driver.Value) bool {
 		fmt.Fprintf(os.Stderr, "Could not convert value %s to string", value)
 		return false
 	}
-	ok, err := regexp.Match("u[0-9|a-z]{16}", []byte(stringValue))
+	ok, err := regexp.Match(userNameRegex, []byte(stringValue))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Encontered err during regex matching: %s", err)
 		return false
@@ -54,7 +57,7 @@ func (u PasswordArgument) Match(value driver.Value) bool {
 		fmt.Fprintf(os.Stderr, "Could not convert value %s to string", value)
 		return false
 	}
-	ok, err := regexp.Match("[0-9|a-z]{64}", []byte(stringValue))
+	ok, err := regexp.Match(passwordRegex, []byte(stringValue))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Encontered err during regex matching: %s", err)
 		return false
@@ -367,6 +370,46 @@ func TestBrokerBindDatabaseSuccess(t *testing.T) {
 
 	if dbErr != nil {
 		t.Fatalf(`unexpected error: %s`, dbErr)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestBrokerBindDatabaseGrantPrivilegesFailure(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	mockInstance := "foobar"
+	mockBindingId := "fake-binding-id"
+	mockDetails := brokerapi.BindDetails{}
+	expectedDbError := errors.New("random error")
+
+	dbColumns := []string{"name", "state"}
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT name, state FROM dbs WHERE instance = $1`)).
+		WithArgs(mockInstance).
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(mockDbName, "done"))
+	mock.ExpectExec(fmt.Sprintf(`CREATE USER %s WITH NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD \'%s\'`, userNameRegex, passwordRegex)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO u[0-9|a-z]{16}", mockDbName)).
+		WillReturnError(expectedDbError)
+	mock.ExpectExec(fmt.Sprintf("DROP USER %s", userNameRegex)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	_, dbErr := mockBroker.Bind(mockInstance, mockBindingId, mockDetails)
+	if dbErr == nil || !strings.Contains(dbErr.Error(), expectedDbError.Error()) {
+		t.Fatalf(`expected error: %s, got: %s`, expectedDbError.Error(), dbErr.Error())
 	}
 
 	// we make sure that all expectations were met
