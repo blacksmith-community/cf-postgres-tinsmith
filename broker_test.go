@@ -343,15 +343,16 @@ func TestBrokerBindDatabaseSuccess(t *testing.T) {
 	}
 	defer db.Close()
 
+	host, port := random(8), random(8)
 	mockBroker := &MockBroker{
 		Broker: Broker{
-			db: db,
+			Host: host,
+			Port: port,
+			db:   db,
 		},
 	}
 
-	mockInstance := "instance-" + random(8)
-	mockBindingId := "binding-" + random(8)
-	mockDetails := brokerapi.BindDetails{}
+	mockInstance, mockBindingId, mockDetails := "instance-"+random(8), "binding-"+random(8), brokerapi.BindDetails{}
 
 	dbColumns := []string{"name", "state"}
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT name, state FROM dbs WHERE instance = $1`)).
@@ -365,6 +366,7 @@ func TestBrokerBindDatabaseSuccess(t *testing.T) {
 		WithArgs(mockBindingId, mockDbName, UsernameArg(), PasswordArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
+	// TODO: do we want to test the shape of the returned binding?
 	_, dbErr := mockBroker.Bind(mockInstance, mockBindingId, mockDetails)
 
 	if dbErr != nil {
