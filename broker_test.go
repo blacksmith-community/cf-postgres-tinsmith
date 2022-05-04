@@ -116,17 +116,17 @@ func TestGetDatabaseName(t *testing.T) {
 	}{
 		"key is db_name": {
 			dbNameKey:  "db_name",
-			dbName:     "foobar",
+			dbName:     random(8),
 			expectedOk: true,
 		},
 		"key is name": {
 			dbNameKey:  "name",
-			dbName:     "foobar2",
+			dbName:     random(8),
 			expectedOk: true,
 		},
 		"key is database": {
 			dbNameKey:  "database",
-			dbName:     "foobar3",
+			dbName:     random(8),
 			expectedOk: true,
 		},
 		"key is foo": {
