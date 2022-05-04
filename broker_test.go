@@ -377,6 +377,73 @@ func TestBrokerBindDatabaseSuccess(t *testing.T) {
 	}
 }
 
+func TestBrokerBindDatabaseSelectCredsFailure(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	mockInstance := "instance-" + random(8)
+	mockBindingId := "binding-" + random(8)
+	mockDetails := brokerapi.BindDetails{}
+	expectedDbError := errors.New("select creds error")
+
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT name, state FROM dbs WHERE instance = $1`)).
+		WithArgs(mockInstance).
+		WillReturnError(expectedDbError)
+
+	_, dbErr := mockBroker.Bind(mockInstance, mockBindingId, mockDetails)
+	if dbErr == nil {
+		t.Fatalf(`expected error, got: %s`, dbErr)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestBrokerBindDatabaseNotReadyFailure(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	mockInstance := "instance-" + random(8)
+	mockBindingId := "binding-" + random(8)
+	mockDetails := brokerapi.BindDetails{}
+
+	dbColumns := []string{"name", "state"}
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT name, state FROM dbs WHERE instance = $1`)).
+		WithArgs(mockInstance).
+		// mock state to not equal "done"
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(mockDbName, "not ready"))
+
+	_, dbErr := mockBroker.Bind(mockInstance, mockBindingId, mockDetails)
+	if dbErr == nil {
+		t.Fatalf(`expected error, got: %s`, dbErr)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
 func TestBrokerBindDatabaseCreateUserFailure(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
