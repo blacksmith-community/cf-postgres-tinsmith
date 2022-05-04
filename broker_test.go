@@ -240,7 +240,7 @@ func TestCreateBrokerDatabaseUnexpectedError(t *testing.T) {
 	}
 }
 
-func TestBrokerProvisionDatabase(t *testing.T) {
+func TestBrokerProvisionDatabaseSuccess(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
@@ -279,7 +279,7 @@ func TestBrokerProvisionDatabase(t *testing.T) {
 	}
 }
 
-func TestBrokerDeprovisionDatabase(t *testing.T) {
+func TestBrokerDeprovisionDatabaseSuccess(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
