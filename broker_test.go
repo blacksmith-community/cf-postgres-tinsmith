@@ -261,19 +261,14 @@ func TestBrokerDeprovisionDatabase(t *testing.T) {
 
 	credsColumns := []string{"name"}
 	credsRows := []string{"fakeCreds"}
-	mockedCredRows := sqlmock.NewRows(credsColumns)
-	for _, credValue := range credsRows {
-		mockedCredRows.AddRow(credValue)
-	}
+	mockedCredRows := sqlmock.NewRows(credsColumns).AddRow(credsRows[0])
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT creds.name FROM creds INNER JOIN dbs ON creds.db = dbs.name WHERE dbs.instance = $1`)).
 		WithArgs(mockInstance).
 		WillReturnRows(mockedCredRows)
-	for _, credValue := range credsRows {
-		mock.ExpectExec(fmt.Sprintf("REVOKE ALL PRIVILEGES ON DATABASE %s FROM %s", mockDbName, credValue)).
-			WillReturnResult(sqlmock.NewResult(1, 1))
-		mock.ExpectExec(fmt.Sprintf("DROP USER %s", credValue)).
-			WillReturnResult(sqlmock.NewResult(1, 1))
-	}
+	mock.ExpectExec(fmt.Sprintf("REVOKE ALL PRIVILEGES ON DATABASE %s FROM %s", mockDbName, credsRows[0])).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP USER %s", credsRows[0])).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	mock.ExpectExec(fmt.Sprintf("DROP DATABASE %s", mockDbName)).
 		WillReturnResult(sqlmock.NewResult(1, 1))
