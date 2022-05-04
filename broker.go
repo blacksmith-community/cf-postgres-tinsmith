@@ -265,7 +265,7 @@ func (b *Broker) Revoke(instance, binding string) error {
 
 	_, err = b.db.Exec(`REVOKE ALL PRIVILEGES ON DATABASE ` + db + ` FROM ` + user)
 	if err != nil {
-		return fmt.Errorf("failed to revoke privileges: %s", err)
+		return fmt.Errorf("failed to revoke privileges: %w", err)
 	}
 
 	b.db.Exec(`DROP USER ` + user)

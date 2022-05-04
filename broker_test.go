@@ -564,3 +564,42 @@ func TestBrokerBindDatabaseInsertCredentialsFailure(t *testing.T) {
 		t.Errorf("there were unfulfilled expectations: %s", err)
 	}
 }
+
+func TestBrokerUnbindDatabaseSuccess(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	mockInstance, mockBindingId, mockDetails := "instance-"+random(8), "binding-"+random(8), brokerapi.UnbindDetails{}
+
+	dbColumns := []string{"state", "name", "db"}
+	dbRowValues := []driver.Value{"done", random(5), mockDbName}
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT dbs.state, creds.name, creds.db FROM creds INNER JOIN dbs ON creds.db = dbs.name WHERE creds.binding = $1`)).
+		WithArgs(mockBindingId).
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(dbRowValues...))
+	mock.ExpectExec(fmt.Sprintf("REVOKE ALL PRIVILEGES ON DATABASE %s FROM %s", mockDbName, dbRowValues[1])).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("DROP USER %s", dbRowValues[1])).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM creds WHERE name = $1`)).
+		WithArgs(dbRowValues[1]).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	err = mockBroker.Unbind(mockInstance, mockBindingId, mockDetails)
+	if err != nil {
+		t.Fatalf(`unexpected error: %s`, err)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
