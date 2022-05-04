@@ -229,20 +229,20 @@ func (b *Broker) Grant(instance, binding string) (string, string, string, error)
 
 	_, err = b.db.Exec(`CREATE USER ` + user + ` WITH NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '` + pass + `'`)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to provision a user: %s", err)
+		return "", "", "", fmt.Errorf("failed to provision a user: %w", err)
 	}
 
 	_, err = b.db.Exec(`GRANT ALL PRIVILEGES ON DATABASE ` + db + ` TO ` + user)
 	if err != nil {
 		b.db.Exec(`DROP USER ` + user)
-		return "", "", "", fmt.Errorf("failed to grant db access to user: %s", err)
+		return "", "", "", fmt.Errorf("failed to grant db access to user: %w", err)
 	}
 
 	_, err = b.db.Exec(`INSERT INTO creds (binding, db, name, pass) VALUES ($1, $2, $3, $4)`,
 		binding, db, user, pass)
 	if err != nil {
 		b.db.Exec(`DROP USER ` + user)
-		return "", "", "", fmt.Errorf("failed to grant db access to user: %s", err)
+		return "", "", "", fmt.Errorf("failed to grant db access to user: %w", err)
 	}
 
 	return user, pass, db, nil
