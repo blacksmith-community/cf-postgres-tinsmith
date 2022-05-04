@@ -26,7 +26,7 @@ const vcapServicesDbCredsJson = `{
 }`
 
 const mockDbName string = "fakeDbName"
-const userNameRegex string = "u[0-9|a-z]{16}"
+const usernameRegex string = "u[0-9|a-z]{16}"
 const passwordRegex string = "[0-9|a-z]{64}"
 
 type UsernameArgument struct{}
@@ -37,7 +37,7 @@ func (u UsernameArgument) Match(value driver.Value) bool {
 		fmt.Fprintf(os.Stderr, "Could not convert value %s to string", value)
 		return false
 	}
-	ok, err := regexp.Match(userNameRegex, []byte(stringValue))
+	ok, err := regexp.Match(usernameRegex, []byte(stringValue))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Encontered err during regex matching: %s", err)
 		return false
@@ -400,11 +400,11 @@ func TestBrokerBindDatabaseGrantPrivilegesFailure(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT name, state FROM dbs WHERE instance = $1`)).
 		WithArgs(mockInstance).
 		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(mockDbName, "done"))
-	mock.ExpectExec(fmt.Sprintf(`CREATE USER %s WITH NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD \'%s\'`, userNameRegex, passwordRegex)).
+	mock.ExpectExec(fmt.Sprintf(`CREATE USER %s WITH NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD \'%s\'`, usernameRegex, passwordRegex)).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO u[0-9|a-z]{16}", mockDbName)).
 		WillReturnError(expectedDbError)
-	mock.ExpectExec(fmt.Sprintf("DROP USER %s", userNameRegex)).
+	mock.ExpectExec(fmt.Sprintf("DROP USER %s", usernameRegex)).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	_, dbErr := mockBroker.Bind(mockInstance, mockBindingId, mockDetails)
