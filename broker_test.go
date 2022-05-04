@@ -50,7 +50,7 @@ func UsernameArg() sqlmock.Argument {
 
 type PasswordArgument struct{}
 
-func (u PasswordArgument) Match(value driver.Value) bool {
+func (p PasswordArgument) Match(value driver.Value) bool {
 	stringValue, ok := value.(string)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "Could not convert value %s to string", value)
