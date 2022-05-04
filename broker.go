@@ -268,8 +268,15 @@ func (b *Broker) Revoke(instance, binding string) error {
 		return fmt.Errorf("failed to revoke privileges: %w", err)
 	}
 
-	b.db.Exec(`DROP USER ` + user)
-	b.db.Exec(`DELETE FROM creds WHERE name = $1`, user)
+	_, err = b.db.Exec(`DROP USER ` + user)
+	if err != nil {
+		return fmt.Errorf("failed to drop user: %w", err)
+	}
+
+	_, err = b.db.Exec(`DELETE FROM creds WHERE name = $1`, user)
+	if err != nil {
+		return fmt.Errorf("failed to delete creds: %w", err)
+	}
 	return nil
 }
 
