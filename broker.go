@@ -133,8 +133,7 @@ func (b *Broker) createBrokerDb() error {
 		if ok && createBrokerDbPqErr.Code == "42P04" {
 			info("broker database already exists, continuing\n")
 		} else {
-			fmt.Fprintf(os.Stderr, "error creating broker database: %s\n", createBrokerDbErr)
-			return createBrokerDbErr
+			return fmt.Errorf("error creating broker database: %w", createBrokerDbErr)
 		}
 	}
 	return nil

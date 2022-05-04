@@ -229,7 +229,7 @@ func TestCreateBrokerDatabaseUnexpectedError(t *testing.T) {
 		WillReturnError(expectedError)
 
 	dbErr := mockBroker.createBrokerDb()
-	if dbErr != expectedError {
+	if !errors.Is(dbErr, expectedError) {
 		t.Fatalf(`expected error: %s, got: %s`, expectedError, dbErr)
 	}
 
