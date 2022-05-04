@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -160,6 +161,33 @@ func TestCreateBrokerDatabaseAlreadyExists(t *testing.T) {
 	dbErr := mockBroker.createBrokerDb()
 	if dbErr != nil {
 		t.Fatalf(`unexpected error: %s`, dbErr)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestCreateBrokerDatabaseUnexpectedError(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+	expectedError := errors.New("random database error")
+	mock.ExpectExec("CREATE DATABASE broker").
+		WillReturnError(expectedError)
+
+	dbErr := mockBroker.createBrokerDb()
+	if dbErr != expectedError {
+		t.Fatalf(`expected error: %s, got: %s`, expectedError, dbErr)
 	}
 
 	// we make sure that all expectations were met
