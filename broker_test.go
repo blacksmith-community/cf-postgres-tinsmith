@@ -214,23 +214,44 @@ func TestBrokerDeprovisionDatabase(t *testing.T) {
 		},
 	}
 
-	instance := "foobar"
-	fakeDetails := brokerapi.DeprovisionDetails{}
+	mockInstance := "foobar"
+	mockDetails := brokerapi.DeprovisionDetails{}
 
 	dbColumns := []string{"state", "name"}
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT state, name FROM dbs WHERE instance = $1`)).
-		WithArgs(instance).
+		WithArgs(mockInstance).
 		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow("enabled", mockDbName))
 	mock.ExpectExec(regexp.QuoteMeta(`UPDATE dbs SET state = 'teardown' WHERE instance = $1`)).
-		WithArgs(instance).
+		WithArgs(mockInstance).
 		WillReturnResult(sqlmock.NewResult(1, 1))
+
 	credsColumns := []string{"name"}
+	credsRows := []string{"fakeCreds"}
+	mockedCredRows := sqlmock.NewRows(credsColumns)
+	for _, credValue := range credsRows {
+		mockedCredRows.AddRow(credValue)
+	}
 	mock.ExpectQuery(regexp.QuoteMeta(`SELECT creds.name FROM creds INNER JOIN dbs ON creds.db = dbs.name WHERE dbs.instance = $1`)).
-		WithArgs(instance).
-		WillReturnRows(sqlmock.NewRows(credsColumns).AddRow("fakeCreds"))
+		WithArgs(mockInstance).
+		WillReturnRows(mockedCredRows)
+	for _, credValue := range credsRows {
+		mock.ExpectExec(fmt.Sprintf("REVOKE ALL PRIVILEGES ON DATABASE %s FROM %s", mockDbName, credValue)).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+		mock.ExpectExec(fmt.Sprintf("DROP USER %s", credValue)).
+			WillReturnResult(sqlmock.NewResult(1, 1))
+	}
+
+	mock.ExpectExec(fmt.Sprintf("DROP DATABASE %s", mockDbName)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM creds WHERE db = $1")).
+		WithArgs(mockDbName).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta("UPDATE dbs SET state = 'gone', expires = extract(epoch from now()) + 3600 WHERE instance = $")).
+		WithArgs(mockInstance).
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	mockBroker.wg.Add(1)
-	_, dbErr := mockBroker.Deprovision(instance, fakeDetails, true)
+	_, dbErr := mockBroker.Deprovision(mockInstance, mockDetails, true)
 	mockBroker.wg.Wait()
 
 	if dbErr != nil {
