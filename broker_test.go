@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"os"
@@ -24,6 +25,46 @@ const vcapServicesDbCredsJson = `{
 }`
 
 const mockDbName string = "fakeDbName"
+
+type UsernameArgument struct{}
+
+func (u UsernameArgument) Match(value driver.Value) bool {
+	stringValue, ok := value.(string)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Could not convert value %s to string", value)
+		return false
+	}
+	ok, err := regexp.Match("u[0-9|a-z]{16}", []byte(stringValue))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Encontered err during regex matching: %s", err)
+		return false
+	}
+	return ok
+}
+
+func UsernameArg() sqlmock.Argument {
+	return UsernameArgument{}
+}
+
+type PasswordArgument struct{}
+
+func (u PasswordArgument) Match(value driver.Value) bool {
+	stringValue, ok := value.(string)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "Could not convert value %s to string", value)
+		return false
+	}
+	ok, err := regexp.Match("[0-9|a-z]{64}", []byte(stringValue))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Encontered err during regex matching: %s", err)
+		return false
+	}
+	return ok
+}
+
+func PasswordArg() sqlmock.Argument {
+	return PasswordArgument{}
+}
 
 type MockBroker struct {
 	Broker
@@ -282,6 +323,47 @@ func TestBrokerDeprovisionDatabase(t *testing.T) {
 	mockBroker.wg.Add(1)
 	_, dbErr := mockBroker.Deprovision(mockInstance, mockDetails, true)
 	mockBroker.wg.Wait()
+
+	if dbErr != nil {
+		t.Fatalf(`unexpected error: %s`, dbErr)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestBrokerBindDatabaseSuccess(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	mockInstance := "foobar"
+	mockBindingId := "fake-binding-id"
+	mockDetails := brokerapi.BindDetails{}
+
+	dbColumns := []string{"name", "state"}
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT name, state FROM dbs WHERE instance = $1`)).
+		WithArgs(mockInstance).
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(mockDbName, "done"))
+	mock.ExpectExec(`CREATE USER u[0-9|a-z]{16} WITH NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD \'[0-9|a-z]{64}\'`).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO u[0-9|a-z]{16}", mockDbName)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO creds (binding, db, name, pass) VALUES ($1, $2, $3, $4)")).
+		WithArgs(mockBindingId, mockDbName, UsernameArg(), PasswordArg()).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	_, dbErr := mockBroker.Bind(mockInstance, mockBindingId, mockDetails)
 
 	if dbErr != nil {
 		t.Fatalf(`unexpected error: %s`, dbErr)
