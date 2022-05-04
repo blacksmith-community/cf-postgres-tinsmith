@@ -12,9 +12,6 @@ import (
 	"github.com/pivotal-cf/brokerapi"
 )
 
-type BrokerInterface interface {
-}
-
 type Broker struct {
 	Description   string
 	Tags          []string
