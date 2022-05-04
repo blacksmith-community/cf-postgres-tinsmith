@@ -253,20 +253,20 @@ func TestBrokerProvisionDatabase(t *testing.T) {
 		},
 	}
 
-	instance := "foobar"
+	mockInstance := "instance-" + random(8)
 	fakeDetails := brokerapi.ProvisionDetails{}
 
 	mock.ExpectExec(regexp.QuoteMeta(`INSERT INTO dbs (instance, name, state, expires) VALUES ($1, $2, $3, $4)`)).
-		WithArgs(instance, mockDbName, "setup", 0).
+		WithArgs(mockInstance, mockDbName, "setup", 0).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(fmt.Sprintf("CREATE DATABASE %s", mockDbName)).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(regexp.QuoteMeta(`UPDATE dbs SET state = 'done' WHERE instance = $1`)).
-		WithArgs(instance).
+		WithArgs(mockInstance).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	mockBroker.wg.Add(1)
-	_, dbErr := mockBroker.Provision(instance, fakeDetails, true)
+	_, dbErr := mockBroker.Provision(mockInstance, fakeDetails, true)
 	mockBroker.wg.Wait()
 
 	if dbErr != nil {
@@ -292,7 +292,7 @@ func TestBrokerDeprovisionDatabase(t *testing.T) {
 		},
 	}
 
-	mockInstance := "foobar"
+	mockInstance := "instance-" + random(8)
 	mockDetails := brokerapi.DeprovisionDetails{}
 
 	dbColumns := []string{"state", "name"}
@@ -350,8 +350,8 @@ func TestBrokerBindDatabaseSuccess(t *testing.T) {
 		},
 	}
 
-	mockInstance := "foobar"
-	mockBindingId := "fake-binding-id"
+	mockInstance := "instance-" + random(8)
+	mockBindingId := "binding-" + random(8)
 	mockDetails := brokerapi.BindDetails{}
 
 	dbColumns := []string{"name", "state"}
@@ -360,7 +360,7 @@ func TestBrokerBindDatabaseSuccess(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(mockDbName, "done"))
 	mock.ExpectExec(`CREATE USER u[0-9|a-z]{16} WITH NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD \'[0-9|a-z]{64}\'`).
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectExec(fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO u[0-9|a-z]{16}", mockDbName)).
+	mock.ExpectExec(fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO %s", mockDbName, usernameRegex)).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO creds (binding, db, name, pass) VALUES ($1, $2, $3, $4)")).
 		WithArgs(mockBindingId, mockDbName, UsernameArg(), PasswordArg()).
@@ -391,8 +391,8 @@ func TestBrokerBindDatabaseGrantPrivilegesFailure(t *testing.T) {
 		},
 	}
 
-	mockInstance := "foobar"
-	mockBindingId := "fake-binding-id"
+	mockInstance := "instance-" + random(8)
+	mockBindingId := "binding-" + random(8)
 	mockDetails := brokerapi.BindDetails{}
 	expectedDbError := errors.New("random error")
 
@@ -402,7 +402,50 @@ func TestBrokerBindDatabaseGrantPrivilegesFailure(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(mockDbName, "done"))
 	mock.ExpectExec(fmt.Sprintf(`CREATE USER %s WITH NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD \'%s\'`, usernameRegex, passwordRegex)).
 		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectExec(fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO u[0-9|a-z]{16}", mockDbName)).
+	mock.ExpectExec(fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO %s", mockDbName, usernameRegex)).
+		WillReturnError(expectedDbError)
+	mock.ExpectExec(fmt.Sprintf("DROP USER %s", usernameRegex)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	_, dbErr := mockBroker.Bind(mockInstance, mockBindingId, mockDetails)
+	if dbErr == nil || !strings.Contains(dbErr.Error(), expectedDbError.Error()) {
+		t.Fatalf(`expected error: %s, got: %s`, expectedDbError.Error(), dbErr.Error())
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
+func TestBrokerBindDatabaseInsertCredentialsFailure(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	mockInstance := "instance-" + random(8)
+	mockBindingId := "binding-" + random(8)
+	mockDetails := brokerapi.BindDetails{}
+	expectedDbError := errors.New("random error")
+
+	dbColumns := []string{"name", "state"}
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT name, state FROM dbs WHERE instance = $1`)).
+		WithArgs(mockInstance).
+		WillReturnRows(sqlmock.NewRows(dbColumns).AddRow(mockDbName, "done"))
+	mock.ExpectExec(fmt.Sprintf(`CREATE USER %s WITH NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD \'%s\'`, usernameRegex, passwordRegex)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(fmt.Sprintf("GRANT ALL PRIVILEGES ON DATABASE %s TO %s", mockDbName, usernameRegex)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO creds (binding, db, name, pass) VALUES ($1, $2, $3, $4)")).
+		WithArgs(mockBindingId, mockDbName, UsernameArg(), PasswordArg()).
 		WillReturnError(expectedDbError)
 	mock.ExpectExec(fmt.Sprintf("DROP USER %s", usernameRegex)).
 		WillReturnResult(sqlmock.NewResult(1, 1))
