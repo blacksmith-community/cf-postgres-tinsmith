@@ -227,6 +227,48 @@ func TestCreateBrokerDatabaseUnexpectedError(t *testing.T) {
 	}
 }
 
+func TestCreateBrokerDatabaseSchemasSuccess(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
+	}
+	defer db.Close()
+
+	mockBroker := &MockBroker{
+		Broker: Broker{
+			db: db,
+		},
+	}
+
+	mock.ExpectExec(regexp.QuoteMeta(`CREATE TYPE state AS ENUM ('setup', 'in-use', 'teardown', 'done', 'gone', 'failed', 'error')`)).
+		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`
+	CREATE TABLE dbs (
+	  instance CHAR(36)          UNIQUE,
+	  name     CHAR(42) NOT NULL UNIQUE,
+	  state    state,
+	  expires  INTEGER
+	)`)).WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectExec(regexp.QuoteMeta(`
+	CREATE TABLE IF NOT EXISTS
+	creds (
+		binding CHAR(36) NOT NULL UNIQUE,
+		name    CHAR(17) NOT NULL UNIQUE,
+		pass    CHAR(64) NOT NULL,
+		db      CHAR(42) NOT NULL
+	)`)).WillReturnResult(sqlmock.NewResult(1, 1))
+
+	dbErr := mockBroker.createBrokerDbSchemas()
+	if dbErr != nil {
+		t.Fatalf(`unexpected error: %s`, dbErr)
+	}
+
+	// we make sure that all expectations were met
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("there were unfulfilled expectations: %s", err)
+	}
+}
+
 func TestBrokerProvisionDatabaseSuccess(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
