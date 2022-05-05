@@ -33,7 +33,7 @@ information in its `$VCAP_SERVICES` credentials block should do:
 - `password`  
 - `db_name` or `name` or `database`
 
-To deploy and configure:
+To deploy and enable this Tinsmith:
 
 ```
 git clone https://github.com/blacksmith-community/cf-postgres-tinsmith
