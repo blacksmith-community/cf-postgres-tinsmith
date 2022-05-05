@@ -12,6 +12,8 @@ import (
 	"github.com/pivotal-cf/brokerapi"
 )
 
+const brokerDatabaseName string = "broker"
+
 type Broker struct {
 	Description   string
 	Tags          []string
@@ -104,7 +106,7 @@ func (b *Broker) Init() error {
 	b.createBrokerDb()
 	b.db.Close()
 
-	b.openDbConnection("broker")
+	b.openDbConnection(brokerDatabaseName)
 	b.createBrokerDbSchemas()
 
 	return nil
@@ -124,7 +126,7 @@ func (b *Broker) openDbConnection(dbName string) error {
 }
 
 func (b *Broker) createBrokerDb() error {
-	_, createBrokerDbErr := b.db.Exec(`CREATE DATABASE broker`)
+	_, createBrokerDbErr := b.db.Exec(fmt.Sprintf(`CREATE DATABASE %s`, brokerDatabaseName))
 	if createBrokerDbErr != nil {
 		createBrokerDbPqErr, ok := createBrokerDbErr.(*pq.Error)
 		if ok && createBrokerDbPqErr.Code == "42P04" {
