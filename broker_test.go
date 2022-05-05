@@ -759,13 +759,13 @@ func TestBrokerUnbindDatabaseDropUserFailure(t *testing.T) {
 	mock.ExpectExec(fmt.Sprintf("REVOKE ALL PRIVILEGES ON DATABASE %s FROM %s", mockDbName, dbRowValues[1])).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	expectedErr := errors.New("drop user error")
+	dropUserErr := errors.New("drop user error")
 	mock.ExpectExec(fmt.Sprintf("DROP USER %s", dbRowValues[1])).
-		WillReturnError(expectedErr)
+		WillReturnError(dropUserErr)
 
 	err = mockBroker.Unbind(mockInstance, mockBindingId, mockDetails)
-	if !errors.Is(err, expectedErr) {
-		t.Fatalf(`expected error %s to wrap %s`, err, expectedErr)
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
 	}
 
 	// we make sure that all expectations were met
@@ -799,14 +799,14 @@ func TestBrokerUnbindDatabaseDeleteCredsFailure(t *testing.T) {
 	mock.ExpectExec(fmt.Sprintf("DROP USER %s", dbRowValues[1])).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	expectedErr := errors.New("delete creds error")
+	deleteCredsErr := errors.New("delete creds error")
 	mock.ExpectExec(regexp.QuoteMeta(`DELETE FROM creds WHERE name = $1`)).
 		WithArgs(dbRowValues[1]).
-		WillReturnError(expectedErr)
+		WillReturnError(deleteCredsErr)
 
 	err = mockBroker.Unbind(mockInstance, mockBindingId, mockDetails)
-	if !errors.Is(err, expectedErr) {
-		t.Fatalf(`expected error %s to wrap %s`, err, expectedErr)
+	if err != nil {
+		t.Fatalf("unexpected err: %s", err)
 	}
 
 	// we make sure that all expectations were met
