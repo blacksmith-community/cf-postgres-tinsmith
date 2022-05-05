@@ -763,6 +763,10 @@ func TestBrokerUnbindDatabaseDropUserFailure(t *testing.T) {
 	mock.ExpectExec(fmt.Sprintf("DROP USER %s", dbRowValues[1])).
 		WillReturnError(dropUserErr)
 
+	// error to DROP USER **should not** cause unbind to fail.
+	// for example: DROP USER may fail if there are still database objects
+	// created/owned by that user, which cannot be resolved without deleting
+	// those objects
 	err = mockBroker.Unbind(mockInstance, mockBindingId, mockDetails)
 	if err != nil {
 		t.Fatalf("unexpected err: %s", err)
