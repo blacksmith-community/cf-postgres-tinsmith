@@ -24,9 +24,16 @@ Deploying
 To deploy this Tinsmith, you need the code, a Cloud Foundry, and a
 PostgreSQL service from your CF Marketplace.  We heartily
 recommend a service deployed via the [Blacksmith][blacksmith] and
-its [PostgreSQL Forge][pg-forge], but any service that provides the 
-`host`, `port` (as a number), `username` and `password` fields 
-in its `$VCAP_SERVICES` credentials block should do.
+its [PostgreSQL Forge][pg-forge], but any service that provides the following 
+information in its `$VCAP_SERVICES` credentials block should do:
+
+- `host`
+- `port` (as a number)
+- `username`
+- `password`  
+- `db_name` or `name` or `database`
+
+To deploy and configure:
 
 ```
 git clone https://github.com/blacksmith-community/cf-postgres-tinsmith
