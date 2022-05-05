@@ -106,10 +106,11 @@ func (b *Broker) Init() error {
 	if err != nil {
 		return err
 	}
-	if err := b.createBrokerDb(serviceDatabase); err != nil {
+	err = b.createBrokerDb(serviceDatabase)
+	serviceDatabase.Close()
+	if err != nil {
 		return err
 	}
-	serviceDatabase.Close()
 
 	db, err := b.openDbConnection(brokerDatabaseName)
 	if err != nil {
