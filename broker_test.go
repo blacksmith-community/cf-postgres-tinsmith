@@ -165,15 +165,11 @@ func TestCreateBrokerDatabaseSuccess(t *testing.T) {
 	}
 	defer db.Close()
 
-	mockBroker := &MockBroker{
-		Broker: Broker{
-			db: db,
-		},
-	}
+	mockBroker := &MockBroker{}
 
 	mock.ExpectExec("CREATE DATABASE broker").WillReturnResult(sqlmock.NewResult(1, 1))
 
-	dbErr := mockBroker.createBrokerDb()
+	dbErr := mockBroker.createBrokerDb(db)
 	if dbErr != nil {
 		t.Fatalf(`unexpected error: %s`, dbErr)
 	}
@@ -191,17 +187,13 @@ func TestCreateBrokerDatabaseAlreadyExists(t *testing.T) {
 	}
 	defer db.Close()
 
-	mockBroker := &MockBroker{
-		Broker: Broker{
-			db: db,
-		},
-	}
+	mockBroker := &MockBroker{}
 	mock.ExpectExec("CREATE DATABASE broker").
 		WillReturnError(&pq.Error{
 			Code: "42P04",
 		})
 
-	dbErr := mockBroker.createBrokerDb()
+	dbErr := mockBroker.createBrokerDb(db)
 	if dbErr != nil {
 		t.Fatalf(`unexpected error: %s`, dbErr)
 	}
@@ -219,16 +211,12 @@ func TestCreateBrokerDatabaseUnexpectedError(t *testing.T) {
 	}
 	defer db.Close()
 
-	mockBroker := &MockBroker{
-		Broker: Broker{
-			db: db,
-		},
-	}
+	mockBroker := &MockBroker{}
 	expectedError := errors.New("random database error")
 	mock.ExpectExec("CREATE DATABASE broker").
 		WillReturnError(expectedError)
 
-	dbErr := mockBroker.createBrokerDb()
+	dbErr := mockBroker.createBrokerDb(db)
 	if !errors.Is(dbErr, expectedError) {
 		t.Fatalf(`expected error: %s, got: %s`, expectedError, dbErr)
 	}

@@ -26,7 +26,7 @@ type Broker struct {
 	Port            string
 	Username        string
 	Password        string
-	InitialDatabase string
+	ServiceDatabase string
 
 	db *sql.DB
 }
@@ -90,7 +90,7 @@ func (b *Broker) Init() error {
 		os.Exit(3)
 	}
 	if s, ok := getDatabaseName(instance); ok {
-		b.InitialDatabase = s
+		b.ServiceDatabase = s
 	} else {
 		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no database name credential\n", instance.Label)
 		os.Exit(3)
@@ -102,31 +102,37 @@ func (b *Broker) Init() error {
 		b.Port = "5432"
 	}
 
-	b.openDbConnection(b.InitialDatabase)
-	b.createBrokerDb()
-	b.db.Close()
+	serviceDatabase, err := b.openDbConnection(b.ServiceDatabase)
+	if err != nil {
+		return err
+	}
+	if err := b.createBrokerDb(serviceDatabase); err != nil {
+		return err
+	}
+	serviceDatabase.Close()
 
-	b.openDbConnection(brokerDatabaseName)
-	b.createBrokerDbSchemas()
+	db, err := b.openDbConnection(brokerDatabaseName)
+	if err != nil {
+		return err
+	}
+	b.db = db
 
-	return nil
+	return b.createBrokerDbSchemas()
 }
 
-func (b *Broker) openDbConnection(dbName string) error {
+func (b *Broker) openDbConnection(dbName string) (*sql.DB, error) {
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", b.Username, b.Password, b.Host, b.Port, dbName)
 
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "unable to open database connection: %s\n", err)
-		return err
+		return nil, fmt.Errorf("unable to open database connection: %w", err)
 	}
 
-	b.db = db
-	return nil
+	return db, nil
 }
 
-func (b *Broker) createBrokerDb() error {
-	_, createBrokerDbErr := b.db.Exec(fmt.Sprintf(`CREATE DATABASE %s`, brokerDatabaseName))
+func (b *Broker) createBrokerDb(db *sql.DB) error {
+	_, createBrokerDbErr := db.Exec(fmt.Sprintf(`CREATE DATABASE %s`, brokerDatabaseName))
 	if createBrokerDbErr != nil {
 		createBrokerDbPqErr, ok := createBrokerDbErr.(*pq.Error)
 		if ok && createBrokerDbPqErr.Code == "42P04" {
