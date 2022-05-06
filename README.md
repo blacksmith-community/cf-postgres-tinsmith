@@ -65,7 +65,7 @@ cf create-service-broker postgres-tinsmith my-broker a-secret \
   https://postgres-tinsmith.$APP_DOMAIN
 ```
 
-If only have the space developer role:
+If you only have the space developer role:
 
 ```shell
 # make sure to target your space
