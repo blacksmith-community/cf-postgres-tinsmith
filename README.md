@@ -58,14 +58,19 @@ cf set-env postgres-tinsmith SB_BROKER_PASSWORD a-secret
 cf start postgres-tinsmith
 ```
 
-Then, create the Tinsmith service broker:
+Then, create the Tinsmith service broker. If you have the administrator role:
 
 ```shell
-# Use this command if you have the administrator role
 cf create-service-broker postgres-tinsmith my-broker a-secret \
   https://postgres-tinsmith.$APP_DOMAIN
+```
 
-# Use this command if you have the space developer role
+If only have the space developer role:
+
+```shell
+# make sure to target your space
+cf target -s <SPACE>
+
 cf create-service-broker postgres-tinsmith my-broker a-secret \
   https://postgres-tinsmith.$APP_DOMAIN --space-scoped
 ```  
