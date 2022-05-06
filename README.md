@@ -24,18 +24,30 @@ Deploying
 To deploy this Tinsmith, you need the code, a Cloud Foundry, and a
 PostgreSQL service from your CF Marketplace.  We heartily
 recommend a service deployed via the [Blacksmith][blacksmith] and
-its [PostgreSQL Forge][pg-forge], but any service that is tagged
-`postgres`, and provides the `host`, `port` (as a number),
-`username` and `password` fields in its `$VCAP_SERVICES`
-credentials block should do.
+its [PostgreSQL Forge][pg-forge], but any service that provides the following 
+information in its `$VCAP_SERVICES` credentials block should do:
+
+- `host`
+- `port` (as a number)
+- `username`
+- `password`  
+- `db_name` or `name` or `database`
+
+To deploy and enable this Tinsmith:
 
 ```
 git clone https://github.com/blacksmith-community/cf-postgres-tinsmith
 cd cf-postgres-tinsmith
 
-# push the code...
+# push the code for tinsmith
 cf push --no-start
+
+# bind your database service to tinsmith
 cf bind-service postgres-tinsmith YOUR-DATABASE-SERVICE
+
+# tag your database service so that tinsmith can find it
+# See "Configuration" below
+cf update-service YOUR-DATABASE-SERVICE -t "postgresql"
 
 # you may want to set some other environment variables at
 # this stage; see "Configuration", below.
@@ -63,26 +75,26 @@ variables.
 There are environment variables for governing the presentation of
 this brokers service / plan in the marketplace:
 
-- `$SERVICE_ID` - The internal ID of the service that this broker
+- `SERVICE_ID` - The internal ID of the service that this broker
   provides to the marketplace.
-- `$SERVICE_NAME` - The CLI-friendly name of the service.
-- `$PLAN_ID` - The internal ID of the plan that this broker
+- `SERVICE_NAME` - The CLI-friendly name of the service.
+- `PLAN_ID` - The internal ID of the plan that this broker
   provides to the marketplace.
-- `$DESCRIPTION` - A human-friendly description of the service /
+- `DESCRIPTION` - A human-friendly description of the service /
   plan, to be displayed in the marketplace
-- `$TAGS` - A comma-separated list of tags to apply to instances
+- `TAGS` - A comma-separated list of tags to apply to instances
   of the service.
 
 There are environment variables for controlling the security and
 authentication parameters of the broker:
 
-- `$SB_BROKER_USERNAME` - The HTTP Basic Auth username that must
+- `SB_BROKER_USERNAME` - The HTTP Basic Auth username that must
   be used to access this broker.  Defaults to `b-postgres`.
-- `$SB_BROKER_PASSWORD` - The HTTP Basic Auth password that must
+- `SB_BROKER_PASSWORD` - The HTTP Basic Auth password that must
   be used to access this broker.  Defaults to `postgres`.
 
 You can also override the service selection logic and force it to
-pick a specific, named service by setting the `$USE_SERVICE`
+pick a specific, named service by setting the `USE_SERVICE`
 environment variable to its name.  Otherwise, the broker will look
 for bound services that are tagged `postgres` or `postgresql`.
 

@@ -8,6 +8,13 @@ import (
 	"os"
 )
 
+func cfg(deflt, env string) string {
+	if s := os.Getenv(env); s != "" {
+		return s
+	}
+	return deflt
+}
+
 func info(m string, args ...interface{}) {
 	fmt.Printf(m, args...)
 }

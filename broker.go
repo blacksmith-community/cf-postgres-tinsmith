@@ -5,10 +5,14 @@ import (
 	"os"
 
 	"database/sql"
-	_ "github.com/lib/pq"
+
+	"github.com/jhunt/vcaptive"
+	"github.com/lib/pq"
 
 	"github.com/pivotal-cf/brokerapi"
 )
+
+const brokerDatabaseName string = "broker"
 
 type Broker struct {
 	Description   string
@@ -18,39 +22,139 @@ type Broker struct {
 		ID   string
 	}
 
-	Host     string
-	Port     string
-	Username string
-	Password string
+	Host            string
+	Port            string
+	Username        string
+	Password        string
+	ServiceDatabase string
 
 	db *sql.DB
 }
 
+func getDatabaseName(instance vcaptive.Instance) (string, bool) {
+	if s, ok := instance.GetString("db_name"); ok {
+		return s, ok
+	}
+	if s, ok := instance.GetString("name"); ok {
+		return s, ok
+	}
+	if s, ok := instance.GetString("database"); ok {
+		return s, ok
+	}
+	return "", false
+}
+
 func (b *Broker) Init() error {
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/?sslmode=disable", b.Username, b.Password, b.Host, b.Port)
+	info("initializing broker\n")
+
+	services, err := vcaptive.ParseServices(os.Getenv("VCAP_SERVICES"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: %s\n", err)
+		os.Exit(1)
+	}
+
+	var (
+		found    bool
+		instance vcaptive.Instance
+	)
+	if name := os.Getenv("USE_SERVICE"); name != "" {
+		instance, found = services.Named(name)
+		if !found {
+			fmt.Fprintf(os.Stderr, "VCAP_SERVICES: no service named '%s' found\n", name)
+			os.Exit(2)
+		}
+	} else {
+		instance, found = services.Tagged("postgres", "postgresql")
+		if !found {
+			fmt.Fprintf(os.Stderr, "VCAP_SERVICES: no 'postgres' service found\n")
+			os.Exit(2)
+		}
+	}
+
+	if s, ok := instance.GetString("username"); ok {
+		b.Username = s
+	} else {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'username' credential\n", instance.Label)
+		os.Exit(3)
+	}
+	if s, ok := instance.GetString("password"); ok {
+		b.Password = s
+	} else {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'password' credential\n", instance.Label)
+		os.Exit(3)
+	}
+	if s, ok := instance.GetString("host"); ok {
+		b.Host = s
+	} else {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'host' credential\n", instance.Label)
+		os.Exit(3)
+	}
+	if s, ok := getDatabaseName(instance); ok {
+		b.ServiceDatabase = s
+	} else {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no database name credential\n", instance.Label)
+		os.Exit(3)
+	}
+	if s, ok := instance.GetString("port"); ok {
+		b.Port = s
+	} else {
+		fmt.Fprintf(os.Stderr, "VCAP_SERVICES: '%s' service has no 'port' credential; using default of 5432\n", instance.Label)
+		b.Port = "5432"
+	}
+
+	serviceDatabase, err := b.openDbConnection(b.ServiceDatabase)
+	if err != nil {
+		return err
+	}
+	err = b.createBrokerDb(serviceDatabase)
+	serviceDatabase.Close()
+	if err != nil {
+		return err
+	}
+
+	db, err := b.openDbConnection(brokerDatabaseName)
+	if err != nil {
+		return err
+	}
+	b.db = db
+
+	return b.createBrokerDbSchemas()
+}
+
+func (b *Broker) openDbConnection(dbName string) (*sql.DB, error) {
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s", b.Username, b.Password, b.Host, b.Port, dbName)
+
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("unable to open database connection: %w", err)
 	}
 
-	db.Exec(`CREATE DATABASE broker`)
-	db.Close()
+	return db, nil
+}
 
-	dsn = fmt.Sprintf("postgres://%s:%s@%s:%s/broker?sslmode=disable", b.Username, b.Password, b.Host, b.Port)
-	db, err = sql.Open("postgres", dsn)
-	if err != nil {
-		return err
+func (b *Broker) createBrokerDb(db *sql.DB) error {
+	_, createBrokerDbErr := db.Exec(fmt.Sprintf(`CREATE DATABASE %s`, brokerDatabaseName))
+	if createBrokerDbErr != nil {
+		createBrokerDbPqErr, ok := createBrokerDbErr.(*pq.Error)
+		if ok && createBrokerDbPqErr.Code == "42P04" {
+			info("broker database already exists, continuing\n")
+		} else {
+			return fmt.Errorf("error creating broker database: %w", createBrokerDbErr)
+		}
 	}
+	return nil
+}
 
-	db.Exec(`CREATE TYPE state AS ENUM ('setup', 'in-use', 'teardown', 'done', 'gone', 'failed', 'error')`)
-	db.Exec(`
+func (b *Broker) createBrokerDbSchemas() error {
+	b.db.Exec(`CREATE TYPE state AS ENUM ('setup', 'in-use', 'teardown', 'done', 'gone', 'failed', 'error')`)
+	b.db.Exec(`
 CREATE TABLE dbs (
   instance CHAR(36)          UNIQUE,
   name     CHAR(42) NOT NULL UNIQUE,
   state    state,
   expires  INTEGER
 )`)
-	db.Exec(`
+	b.db.Exec(`
 CREATE TABLE IF NOT EXISTS
 creds (
   binding CHAR(36) NOT NULL UNIQUE,
@@ -58,8 +162,6 @@ creds (
   pass    CHAR(64) NOT NULL,
   db      CHAR(42) NOT NULL
 )`)
-
-	b.db = db
 	return nil
 }
 
@@ -73,16 +175,20 @@ func (b *Broker) fail(what, instance string, err error) {
 	b.db.Exec(`UPDATE dbs SET state = 'failed'::state WHERE instance = $1`, instance)
 }
 
-func (b *Broker) Setup(instance string) {
+func (b *Broker) generatedRandomDbName() string {
 	db := "db" + random(40)
+	return db
+}
+
+func (b *Broker) Setup(instance string, dbName string) {
 	_, err := b.db.Exec(`INSERT INTO dbs (instance, name, state, expires) VALUES ($1, $2, $3, $4)`,
-		instance, db, "setup", 0)
+		instance, dbName, "setup", 0)
 	if err != nil {
 		b.fail("creating `dbs` entry", instance, err)
 		return
 	}
 
-	_, err = b.db.Exec(`CREATE DATABASE ` + db)
+	_, err = b.db.Exec(`CREATE DATABASE ` + dbName)
 	if err != nil {
 		b.fail("creating instance database", instance, err)
 		return
@@ -126,22 +232,22 @@ func (b *Broker) Grant(instance, binding string) (string, string, string, error)
 	user := "u" + random(16)
 	pass := random(64)
 
-	_, err = b.db.Exec(`CREATE USER ` + user + ` WITH NOCREATEDB NOCREATEROLE NOREPLICATION UNENCRYPTED PASSWORD '` + pass + `'`)
+	_, err = b.db.Exec(`CREATE USER ` + user + ` WITH NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD '` + pass + `'`)
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to provision a user: %s", err)
+		return "", "", "", fmt.Errorf("failed to provision a user: %w", err)
 	}
 
 	_, err = b.db.Exec(`GRANT ALL PRIVILEGES ON DATABASE ` + db + ` TO ` + user)
 	if err != nil {
 		b.db.Exec(`DROP USER ` + user)
-		return "", "", "", fmt.Errorf("failed to grant db access to user: %s", err)
+		return "", "", "", fmt.Errorf("failed to grant db access to user: %w", err)
 	}
 
 	_, err = b.db.Exec(`INSERT INTO creds (binding, db, name, pass) VALUES ($1, $2, $3, $4)`,
 		binding, db, user, pass)
 	if err != nil {
 		b.db.Exec(`DROP USER ` + user)
-		return "", "", "", fmt.Errorf("failed to grant db access to user: %s", err)
+		return "", "", "", fmt.Errorf("failed to grant db access to user: %w", err)
 	}
 
 	return user, pass, db, nil
@@ -165,11 +271,12 @@ func (b *Broker) Revoke(instance, binding string) error {
 
 	_, err = b.db.Exec(`REVOKE ALL PRIVILEGES ON DATABASE ` + db + ` FROM ` + user)
 	if err != nil {
-		return fmt.Errorf("failed to revoke privileges: %s", err)
+		return fmt.Errorf("failed to revoke privileges: %w", err)
 	}
 
 	b.db.Exec(`DROP USER ` + user)
 	b.db.Exec(`DELETE FROM creds WHERE name = $1`, user)
+
 	return nil
 }
 
@@ -238,7 +345,9 @@ func (b *Broker) Provision(instance string, details brokerapi.ProvisionDetails, 
 		return spec, fmt.Errorf("invalid plan %s/%s", details.ServiceID, details.PlanID)
 	}
 
-	go b.Setup(instance)
+	dbName := b.generatedRandomDbName()
+
+	go b.Setup(instance, dbName)
 	return spec, nil
 }
 
