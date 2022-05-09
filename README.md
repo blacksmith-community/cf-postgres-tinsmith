@@ -33,9 +33,9 @@ information in its `$VCAP_SERVICES` credentials block should do:
 - `password`  
 - `db_name` or `name` or `database`
 
-To deploy and enable this Tinsmith:
+To deploy and start the Tinsmith application:
 
-```
+```shell
 git clone https://github.com/blacksmith-community/cf-postgres-tinsmith
 cd cf-postgres-tinsmith
 
@@ -56,13 +56,32 @@ cf set-env postgres-tinsmith SB_BROKER_PASSWORD a-secret
 
 # start the app
 cf start postgres-tinsmith
+```
 
-# register this tinsmith as a service broker in CF
+Then, create the Tinsmith service broker. If you have the administrator role:
+
+```shell
 cf create-service-broker postgres-tinsmith my-broker a-secret \
   https://postgres-tinsmith.$APP_DOMAIN
+```
+
+If you only have the space developer role:
+
+```shell
+# make sure to target your space
+cf target -s <SPACE>
+
+cf create-service-broker postgres-tinsmith my-broker a-secret \
+  https://postgres-tinsmith.$APP_DOMAIN --space-scoped
+```  
+
+Lastly, enable the new `postgres` service provided by this Tinsmith and verify it:
+
+```shell
+# enable the service
 cf enable-service-access postgres
 
-# marvel at your handiwork
+# verify service appears in the list
 cf marketplace
 ```
 
