@@ -1,5 +1,4 @@
-PostgreSQL Tinsmith
-===================
+# PostgreSQL Tinsmith
 
 A _tinsmith_, in Blacksmith Services parlance, is a Cloud Foundry
 Service Broker that runs as a Cloud Foundry Application, consumes
@@ -18,8 +17,7 @@ individual databases for each service.  Bound applications will
 have free run of their own database, but will be unable to
 interact with other shared databases on the same installation.
 
-Deploying
----------
+## Deploying
 
 To deploy this Tinsmith, you need the code, a Cloud Foundry, and a
 PostgreSQL service from your CF Marketplace.  We heartily
@@ -58,11 +56,14 @@ cf set-env postgres-tinsmith SB_BROKER_PASSWORD a-secret
 cf start postgres-tinsmith
 ```
 
-Then, create the Tinsmith service broker. If you have the administrator role:
+Then, create the Tinsmith service broker and enable the service. If you have the administrator role:
 
 ```shell
 cf create-service-broker postgres-tinsmith my-broker a-secret \
   https://postgres-tinsmith.$APP_DOMAIN
+
+# enable the service
+cf enable-service-access postgres
 ```
 
 If you only have the space developer role:
@@ -75,18 +76,13 @@ cf create-service-broker postgres-tinsmith my-broker a-secret \
   https://postgres-tinsmith.$APP_DOMAIN --space-scoped
 ```  
 
-Lastly, enable the new `postgres` service provided by this Tinsmith and verify it:
+Lastly, verify that the service appears in the marketplace:
 
 ```shell
-# enable the service
-cf enable-service-access postgres
-
-# verify service appears in the list
 cf marketplace
 ```
 
-Configuring
------------
+## Configuring
 
 This tinsmith is configured entirely through environment
 variables.
